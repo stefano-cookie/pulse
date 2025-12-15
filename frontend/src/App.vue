@@ -6,20 +6,41 @@ import axios from 'axios'
 const notifications = ref([])
 const isConnected = ref(false)
 const socketId = ref(null)
-const notificationPermission = ref(Notification.permission)
+const notificationPermission = ref('Notification' in window ? Notification.permission : 'default')
 const showInstallPrompt = ref(false)
 const isIOS = ref(false)
 const isAndroid = ref(false)
 const isStandalone = ref(false)
 const deferredPrompt = ref(null)
+const forceIOSMode = ref(false)
+const displayMode = ref('browser')
+const navigatorStandalone = ref(false)
+const isHTTPS = ref(window.location.protocol === 'https:')
+const iOSVersionNumber = ref(0)
 
 const deviceInfo = computed(() => ({
   platform: navigator.platform,
   userAgent: navigator.userAgent,
   browser: getBrowserName(),
   isIOS: isIOS.value,
-  isAndroid: isAndroid.value
+  isAndroid: isAndroid.value,
+  isStandalone: isStandalone.value,
+  iOSVersion: getIOSVersion(),
+  isHTTPS: isHTTPS.value,
+  protocol: window.location.protocol
 }))
+
+function getIOSVersion() {
+  const match = navigator.userAgent.match(/OS (\d+)_(\d+)_?(\d+)?/)
+  if (match) {
+    const major = parseInt(match[1])
+    const minor = parseInt(match[2])
+    iOSVersionNumber.value = major + (minor / 10)
+    return `${match[1]}.${match[2]}${match[3] ? '.' + match[3] : ''}`
+  }
+  iOSVersionNumber.value = 0
+  return 'Unknown'
+}
 
 function getBrowserName() {
   const ua = navigator.userAgent
@@ -32,10 +53,15 @@ function getBrowserName() {
 
 function detectDevice() {
   const ua = navigator.userAgent
-  isIOS.value = /iPad|iPhone|iPod/.test(ua) && !window.MSStream
-  isAndroid.value = /Android/.test(ua)
+  const urlParams = new URLSearchParams(window.location.search)
+  forceIOSMode.value = urlParams.get('testios') === 'true'
+
+  isIOS.value = forceIOSMode.value || (/iPad|iPhone|iPod/.test(ua) && !window.MSStream)
+  isAndroid.value = !forceIOSMode.value && /Android/.test(ua)
   isStandalone.value = window.matchMedia('(display-mode: standalone)').matches ||
                        window.navigator.standalone === true
+  displayMode.value = window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser'
+  navigatorStandalone.value = window.navigator.standalone === true
 }
 
 function setupInstallPrompt() {
@@ -59,12 +85,44 @@ async function installApp() {
 }
 
 async function requestNotificationPermission() {
-  if ('Notification' in window) {
+  if (isIOS.value && !isHTTPS.value) {
+    alert('ERRORE: iOS richiede una connessione HTTPS sicura per le notifiche.\n\nDevi accedere all\'app tramite https:// invece di http://')
+    return false
+  }
+
+  if (isIOS.value && iOSVersionNumber.value > 0 && iOSVersionNumber.value < 16.4) {
+    alert(`Le notifiche PWA richiedono iOS 16.4 o superiore.\n\nLa tua versione: iOS ${getIOSVersion()}\n\nAggiorna il tuo iPhone per usare questa funzionalità.`)
+    return false
+  }
+
+  if (!('Notification' in window)) {
+    alert('Le notifiche non sono supportate su questo dispositivo/browser')
+    return false
+  }
+
+  if (isIOS.value && !isStandalone.value) {
+    alert('Su iOS, le notifiche funzionano SOLO dopo aver installato l\'app sulla Home screen.\n\nSegui le istruzioni sopra per installarla.')
+    return false
+  }
+
+  try {
     const permission = await Notification.requestPermission()
     notificationPermission.value = permission
+
+    if (permission === 'granted') {
+      new Notification('Permesso Accordato!', {
+        body: 'Ora riceverai le notifiche in tempo reale',
+        icon: '/pwa-192x192.png'
+      })
+    } else if (permission === 'denied') {
+      alert('Hai negato il permesso per le notifiche.\n\nSe hai già negato il permesso in passato, Safari lo ricorda. Segui le istruzioni sotto per resettare.')
+    }
+
     return permission === 'granted'
+  } catch (error) {
+    alert(`Errore: ${error.message}`)
+    return false
   }
-  return false
 }
 
 function showBrowserNotification(title, body) {
@@ -84,7 +142,7 @@ async function registerDevice(socketId) {
       device_info: deviceInfo.value
     })
   } catch (error) {
-    // Silent fail - device registration is not critical for app functionality
+
   }
 }
 
@@ -182,14 +240,99 @@ onMounted(() => {
                notificationPermission === 'denied' ? 'Permesso negato' : 'Non richiesto' }}
           </span>
         </div>
+
+        <div v-if="isIOS && !isHTTPS" class="https-error-warning">
+          <p><strong>ERRORE CRITICO: HTTPS Richiesto</strong></p>
+          <p>iOS richiede una connessione <strong>HTTPS sicura</strong> per le notifiche PWA.</p>
+          <p>Stai usando: <code>{{ deviceInfo.protocol }}//{{ window.location.host }}</code></p>
+          <p><strong>Soluzione:</strong></p>
+          <ol>
+            <li>Configura HTTPS sul server di sviluppo</li>
+  ß          <li>Accedi tramite <code>https://192.168.1.10:5174</code> invece di http://</li>
+            <li>Accetta il certificato self-signed in Safari</li>
+            <li>Reinstalla l'app sulla Home screen</li>
+          </ol>
+          <p class="https-note">Senza HTTPS, Safari blocca <code>Notification.requestPermission()</code> sempre con "denied".</p>
+        </div>
+
+        <div v-if="isIOS && iOSVersionNumber > 0 && iOSVersionNumber < 16.4" class="ios-version-warning">
+          <p><strong>Versione iOS Non Supportata</strong></p>
+          <p>Le notifiche PWA richiedono <strong>iOS 16.4 o superiore</strong>.</p>
+          <p>La tua versione: <strong>iOS {{ deviceInfo.iOSVersion }}</strong></p>
+          <p><strong>Soluzione:</strong> Aggiorna il tuo iPhone a iOS 16.4+ in Impostazioni → Generali → Aggiornamento Software</p>
+        </div>
+
+        <div v-if="isIOS && !isStandalone && isHTTPS && (iOSVersionNumber === 0 || iOSVersionNumber >= 16.4)" class="ios-notification-warning">
+          <p><strong>Importante per iOS</strong></p>
+          <p>Le notifiche su iOS funzionano SOLO dopo aver installato l'app sulla Home screen (richiede iOS 16.4+).</p>
+          <p><strong>Procedura:</strong></p>
+          <ol>
+            <li>Tocca il pulsante <strong>Condividi</strong> in Safari</li>
+            <li>Seleziona <strong>"Aggiungi alla schermata Home"</strong></li>
+            <li>Chiudi Safari completamente</li>
+            <li>Apri l'app "Pulse" dalla Home screen</li>
+            <li>Solo ora il pulsante "Richiedi permesso" funzionerà</li>
+          </ol>
+        </div>
+
         <button
           v-if="notificationPermission !== 'granted'"
           @click="requestNotificationPermission"
           class="btn btn-secondary"
-          :disabled="notificationPermission === 'denied'"
+          :disabled="notificationPermission === 'denied' || (isIOS && !isHTTPS) || (isIOS && iOSVersionNumber > 0 && iOSVersionNumber < 16.4) || (isIOS && !isStandalone)"
         >
-          {{ notificationPermission === 'denied' ? 'Permesso negato nelle impostazioni' : 'Richiedi permesso' }}
+          {{ notificationPermission === 'denied' ? 'Permesso negato nelle impostazioni' :
+             (isIOS && !isHTTPS) ? 'HTTPS richiesto (vedi sopra)' :
+             (isIOS && iOSVersionNumber > 0 && iOSVersionNumber < 16.4) ? 'iOS version troppo vecchia' :
+             (isIOS && !isStandalone) ? 'Installa app prima (vedi sopra)' :
+             'Richiedi permesso' }}
         </button>
+
+        <div v-if="notificationPermission === 'denied'" class="permission-denied-help">
+          <p><strong>Come riattivare i permessi:</strong></p>
+          <div v-if="isIOS && isStandalone">
+            <p class="ios-error-note">Hai negato il permesso. Safari sta tenendo in cache la tua scelta precedente.</p>
+            <p><strong>Reset COMPLETO (unico modo che funziona):</strong></p>
+            <ol>
+              <li><strong>Elimina l'app</strong> dalla Home screen (tieni premuto l'icona → Rimuovi app)</li>
+              <li><strong>Vai in Impostazioni iPhone</strong> → <strong>Safari</strong></li>
+              <li>Tocca <strong>"Cancella dati siti web e cronologia"</strong> (in basso)
+                <ul class="nested-list">
+                  <li>Questo cancellerà cronologia, cookie e cache di Safari</li>
+                  <li>Se non vuoi perdere tutto, vai in <strong>Avanzate → Dati dei siti web</strong> e prova a eliminare solo <code>192.168.1.10</code></li>
+                </ul>
+              </li>
+              <li><strong>Riavvia l'iPhone</strong> (tieni premuto power + volume → Scorri per spegnere)
+                <ul class="nested-list">
+                  <li>Questo è importante per svuotare completamente la cache di Safari</li>
+                </ul>
+              </li>
+              <li><strong>Riaccendi l'iPhone</strong></li>
+              <li><strong>Apri Safari</strong> e vai su: <code>http://192.168.1.10:5173</code></li>
+              <li><strong>Reinstalla l'app:</strong> Tocca Condividi → Aggiungi alla schermata Home</li>
+              <li><strong>Apri l'app</strong> dalla Home screen</li>
+              <li><strong>Tocca "Richiedi permesso"</strong> e questa volta scegli <strong>"Consenti"</strong></li>
+            </ol>
+            <p class="ios-settings-note">Il riavvio è fondamentale: Safari su iOS tiene in cache i permessi negati e solo un riavvio li resetta completamente.</p>
+          </div>
+          <div v-else-if="isIOS && !isStandalone">
+            <p><strong>Da Safari:</strong></p>
+            <ol>
+              <li>Tocca <strong>aA</strong> nella barra degli indirizzi (in alto a sinistra)</li>
+              <li>Tocca <strong>"Impostazioni sito web"</strong></li>
+              <li>Trova <strong>Notifiche</strong> e cambia da "Nega" a <strong>"Consenti"</strong></li>
+              <li>Ricarica questa pagina</li>
+            </ol>
+          </div>
+          <div v-else>
+            <ol>
+              <li>Clicca sull'icona del lucchetto/informazioni nella barra degli indirizzi</li>
+              <li>Trova le impostazioni delle notifiche</li>
+              <li>Cambia da "Blocca" a "Consenti"</li>
+              <li>Ricarica questa pagina</li>
+            </ol>
+          </div>
+        </div>
       </section>
 
       <section class="card">
@@ -216,8 +359,23 @@ onMounted(() => {
           <p><strong>Platform:</strong> {{ deviceInfo.platform }}</p>
           <p><strong>Browser:</strong> {{ deviceInfo.browser }}</p>
           <p><strong>iOS:</strong> {{ isIOS ? 'Si' : 'No' }}</p>
+          <p><strong>iOS Version:</strong> {{ deviceInfo.iOSVersion }} ({{ iOSVersionNumber }})</p>
           <p><strong>Android:</strong> {{ isAndroid ? 'Si' : 'No' }}</p>
           <p><strong>Standalone:</strong> {{ isStandalone ? 'Si' : 'No' }}</p>
+          <p><strong>display-mode:</strong> {{ displayMode }}</p>
+          <p><strong>navigator.standalone:</strong> {{ navigatorStandalone ? 'true' : 'false' }}</p>
+          <p><strong>Protocol:</strong> {{ deviceInfo.protocol }}</p>
+          <p><strong>HTTPS:</strong> {{ isHTTPS ? 'Si' : 'No' }}</p>
+          <p><strong>Notification API:</strong> Disponibile</p>
+          <p><strong>Notification.permission:</strong> {{ notificationPermission }}</p>
+          <p v-if="forceIOSMode" class="test-mode-warning">
+            <strong>Modalità Test iOS Attiva</strong>
+          </p>
+        </div>
+        <div v-if="!forceIOSMode && !isIOS" class="test-hint">
+          <p class="text-muted">
+            Per testare la modalità iOS, aggiungi <code>?testios=true</code> all'URL
+          </p>
         </div>
       </section>
     </main>
@@ -411,5 +569,189 @@ body {
 .debug-info p {
   font-size: 0.875rem;
   margin-bottom: 4px;
+}
+
+.test-mode-warning {
+  color: #d97706;
+  background-color: #fef3c7;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.test-hint {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.test-hint code {
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.813rem;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.ios-notification-warning {
+  background-color: #fef3c7;
+  border: 1px solid #fbbf24;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.ios-notification-warning p {
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+.ios-notification-warning p:last-child {
+  margin-bottom: 0;
+}
+
+.ios-notification-warning ol {
+  margin: 8px 0 12px 0;
+  padding-left: 20px;
+  color: #92400e;
+}
+
+.ios-notification-warning li {
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+}
+
+.permission-denied-help {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.permission-denied-help p {
+  margin-bottom: 12px;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.permission-denied-help ol {
+  margin: 8px 0;
+  padding-left: 20px;
+  color: #7f1d1d;
+}
+
+.permission-denied-help li {
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+}
+
+.ios-settings-note {
+  background-color: #fefce8;
+  border-left: 3px solid #eab308;
+  padding: 8px 12px;
+  margin: 12px 0;
+  font-size: 0.875rem;
+  color: #854d0e;
+}
+
+.ios-error-note {
+  background-color: #fef2f2;
+  border-left: 3px solid #ef4444;
+  padding: 8px 12px;
+  margin: 12px 0;
+  font-size: 0.875rem;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.nested-list {
+  list-style-type: circle;
+  margin-top: 8px;
+  padding-left: 20px;
+}
+
+.nested-list li {
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+}
+
+.permission-denied-help code {
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.813rem;
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: #1f2937;
+}
+
+.https-error-warning {
+  background-color: #fee;
+  border: 2px solid #dc2626;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.https-error-warning p {
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  color: #7f1d1d;
+}
+
+.https-error-warning p:first-child {
+  font-size: 1rem;
+  color: #991b1b;
+}
+
+.https-error-warning ol {
+  margin: 8px 0 12px 0;
+  padding-left: 20px;
+  color: #7f1d1d;
+}
+
+.https-error-warning li {
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+}
+
+.https-error-warning code {
+  background-color: #fef2f2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.813rem;
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.https-note {
+  background-color: #fefce8;
+  border-left: 3px solid #dc2626;
+  padding: 8px 12px;
+  margin: 12px 0 0 0;
+  font-size: 0.875rem;
+  color: #854d0e;
+  font-weight: 600;
+}
+
+.ios-version-warning {
+  background-color: #fef3c7;
+  border: 2px solid #f59e0b;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.ios-version-warning p {
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+.ios-version-warning p:first-child {
+  font-size: 1rem;
+  color: #78350f;
 }
 </style>

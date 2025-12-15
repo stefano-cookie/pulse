@@ -1,6 +1,12 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import fs from 'fs'
+import path from 'path'
+
+const certPath = path.resolve(__dirname, '.cert/cert.pem')
+const keyPath = path.resolve(__dirname, '.cert/key.pem')
+const hasSSL = fs.existsSync(certPath) && fs.existsSync(keyPath)
 
 export default defineConfig({
   plugins: [
@@ -42,6 +48,16 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 5173
+    port: 5174,
+    host: '0.0.0.0',
+    https: hasSSL ? {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath)
+    } : false,
+    hmr: hasSSL ? false : {
+      protocol: 'ws',
+      host: '192.168.1.10',
+      clientPort: 5174
+    }
   }
 })

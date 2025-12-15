@@ -43,13 +43,17 @@ PUSHER_APP_KEY=your_app_key
 PUSHER_APP_SECRET=your_app_secret
 PUSHER_APP_CLUSTER=eu
 
-php artisan serve
+# Espone su rete locale (necessario per test iPhone)
+php artisan serve --host=0.0.0.0
 ```
 
-Il backend sarà disponibile su: http://localhost:8000
+Il backend sarà disponibile su:
+- **Locale**: http://localhost:8000
+- **Network**: http://192.168.1.10:8000
 
-- **Admin Panel**: http://localhost:8000/admin
-- **API Devices**: POST http://localhost:8000/api/devices/register
+Endpoints:
+- **Admin Panel**: http://192.168.1.10:8000/admin
+- **API Devices**: POST http://192.168.1.10:8000/api/devices/register
 
 ### 3. Frontend (Vue.js PWA)
 
@@ -59,11 +63,15 @@ npm install
 
 VITE_PUSHER_APP_KEY=your_app_key
 VITE_PUSHER_APP_CLUSTER=eu
+VITE_API_URL=http://192.168.1.10:8000/api
 
-npm run dev
+# Sviluppo HTTP (espone su rete locale)
+npm run dev -- --host
+# Disponibile su: http://192.168.1.10:5174
+
+# HTTPS per test iOS (richiede certificati - vedi sezione iOS)
+npm run serve:https
 ```
-
-Il frontend sarà disponibile su: http://localhost:5173
 
 ### 4. Build per Produzione
 
@@ -133,19 +141,21 @@ Registra un nuovo device.
 5. Invia una notifica con Titolo e Descrizione
 6. La notifica apparirà in tempo reale nel frontend
 
-## Note
+## Testing su iOS
 
-- Per testare le notifiche push su mobile, è necessario servire il frontend via HTTPS
-- Su iOS, le notifiche push sono supportate solo da iOS 16.4+ quando l'app è installata come PWA
-- Il Service Worker viene generato automaticamente in fase di build
+Le notifiche PWA su iOS richiedono HTTPS. Setup rapido:
 
-## Troubleshooting
+```bash
+brew install mkcert
+mkcert -install
 
-### "Disconnesso" nel frontend
-- Verifica che le credenziali Pusher siano corrette in entrambi i file .env
-- Controlla la console del browser per errori
+cd frontend
+mkdir -p .cert
+mkcert -key-file .cert/key.pem -cert-file .cert/cert.pem localhost 127.0.0.1 192.168.1.10 ::1
 
-### Notifiche non arrivano
-- Verifica che i permessi notifiche siano stati accordati
-- Controlla che il backend invii l'evento (verifica logs Laravel)
-- Verifica la Pusher Debug Console su pusher.com
+npm run serve:https
+
+# Apri su iPhone: https://192.168.1.10:5174
+```
+
+**Requisiti iOS**: iOS 16.4+ e app installata su Home screen
