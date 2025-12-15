@@ -54,10 +54,14 @@ export default defineConfig({
       key: fs.readFileSync(keyPath),
       cert: fs.readFileSync(certPath)
     } : false,
-    hmr: hasSSL ? false : {
-      protocol: 'ws',
+    hmr: {
+      protocol: hasSSL ? 'wss' : 'ws',
       host: '192.168.1.10',
-      clientPort: 5174
+      clientPort: 5174,
+      overlay: true
+    },
+    watch: {
+      usePolling: false
     }
   }
 })
