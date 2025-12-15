@@ -37,12 +37,22 @@ pulse/
 
 ```bash
 cd backend
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+```
 
+Configura le credenziali Pusher nel file `.env`:
+```env
 PUSHER_APP_ID=your_app_id
 PUSHER_APP_KEY=your_app_key
 PUSHER_APP_SECRET=your_app_secret
 PUSHER_APP_CLUSTER=eu
+```
 
+Avvia il server:
+```bash
 # Espone su rete locale (necessario per test iPhone)
 php artisan serve --host=0.0.0.0
 ```
@@ -60,14 +70,20 @@ Endpoints:
 ```bash
 cd frontend
 npm install
+cp .env.example .env
+```
 
+Configura le credenziali nel file `.env`:
+```env
 VITE_PUSHER_APP_KEY=your_app_key
 VITE_PUSHER_APP_CLUSTER=eu
-VITE_API_URL=http://192.168.1.10:8000/api
+VITE_API_URL=http://<YOUR_LOCAL_IP>:8000/api
+```
 
+Avvia il dev server:
+```bash
 # Sviluppo HTTP (espone su rete locale)
 npm run dev -- --host
-# Disponibile su: http://192.168.1.10:5174
 
 # HTTPS per test iOS (richiede certificati - vedi sezione iOS)
 npm run serve:https

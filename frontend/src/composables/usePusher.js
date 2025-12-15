@@ -14,6 +14,7 @@ export function usePusher() {
         device_info: deviceInfo
       })
     } catch (error) {
+      console.error('Errore registrazione device:', error.message)
     }
   }
 

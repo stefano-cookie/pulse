@@ -3,10 +3,23 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 
 const certPath = path.resolve(__dirname, '.cert/cert.pem')
 const keyPath = path.resolve(__dirname, '.cert/key.pem')
 const hasSSL = fs.existsSync(certPath) && fs.existsSync(keyPath)
+
+function getLocalIP() {
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+  return 'localhost'
+}
 
 export default defineConfig({
   plugins: [
@@ -56,7 +69,7 @@ export default defineConfig({
     } : false,
     hmr: {
       protocol: hasSSL ? 'wss' : 'ws',
-      host: '192.168.1.10',
+      host: getLocalIP(),
       clientPort: 5174,
       overlay: true
     },
