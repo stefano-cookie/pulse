@@ -88,21 +88,7 @@
             </div>
         @endif
 
-        <div class="mb-8">
-            <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 inline-flex">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <i data-lucide="smartphone" class="w-5 h-5 text-purple-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold text-white">{{ $devices->count() }}</p>
-                        <p class="text-xs text-gray-500">Device registrati</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid lg:grid-cols-2 gap-8">
+        <div class="max-w-xl mx-auto">
             <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-800 flex items-center gap-3">
                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -129,60 +115,10 @@
                             class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                             <i data-lucide="send" id="sendIcon" class="w-4 h-4"></i>
                             <i data-lucide="loader-2" id="loadingIcon" class="w-4 h-4 hidden animate-spin"></i>
-                            <span id="btnText">Invia a tutti i device</span>
+                            <span id="btnText">Invia notifica</span>
                         </button>
                     </div>
                 </form>
-            </div>
-
-            <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-800 flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <i data-lucide="smartphone" class="w-4 h-4 text-blue-400"></i>
-                    </div>
-                    <h2 class="font-semibold text-white">Device Registrati</h2>
-                </div>
-                <div class="p-6">
-                    @if($devices->isEmpty())
-                        <div class="text-center py-12">
-                            <div class="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
-                                <i data-lucide="inbox" class="w-8 h-8 text-gray-600"></i>
-                            </div>
-                            <p class="text-gray-500">Nessun device registrato</p>
-                            <p class="text-sm text-gray-600 mt-1">I device appariranno qui quando si registreranno</p>
-                        </div>
-                    @else
-                        <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                            @foreach($devices as $device)
-                                <div class="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50 hover:border-gray-600 transition group">
-                                    <div class="flex items-start gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                                            <i data-lucide="smartphone" class="w-5 h-5 text-purple-400"></i>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            @if($device->socket_id)
-                                                <p class="text-sm text-gray-400 font-mono truncate">
-                                                    Socket: {{ Str::limit($device->socket_id, 20) }}
-                                                </p>
-                                            @endif
-                                            @if($device->device_info)
-                                                <p class="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                                                    <i data-lucide="monitor" class="w-3 h-3"></i>
-                                                    {{ $device->device_info['platform'] ?? 'N/A' }} &bull;
-                                                    {{ $device->device_info['browser'] ?? 'N/A' }}
-                                                </p>
-                                            @endif
-                                            <p class="text-xs text-gray-600 mt-2 flex items-center gap-1">
-                                                <i data-lucide="clock" class="w-3 h-3"></i>
-                                                {{ $device->created_at->format('d/m/Y H:i') }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
             </div>
         </div>
     </main>
@@ -207,7 +143,7 @@
             submitBtn.disabled = false;
             sendIcon.classList.remove('hidden');
             loadingIcon.classList.add('hidden');
-            btnText.textContent = 'Invia a tutti i device';
+            btnText.textContent = 'Invia notifica';
         @endif
     </script>
 </body>

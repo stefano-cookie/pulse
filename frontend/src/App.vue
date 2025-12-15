@@ -96,7 +96,7 @@ async function requestNotificationPermission() {
 onMounted(() => {
   detectDevice()
   setupInstallPrompt()
-  initPusher(deviceInfo.value, showBrowserNotification)
+  initPusher(showBrowserNotification)
 })
 </script>
 

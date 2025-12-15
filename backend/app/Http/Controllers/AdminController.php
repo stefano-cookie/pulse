@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Events\NotificationSent;
-use App\Models\Device;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -12,8 +11,7 @@ class AdminController extends Controller
 {
     public function index(): View
     {
-        $devices = Device::latest()->get();
-        return view('admin.index', compact('devices'));
+        return view('admin.index');
     }
 
     public function sendNotification(Request $request): RedirectResponse
